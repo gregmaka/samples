@@ -1,0 +1,64 @@
+diff --git a/modules/contrib/bynder/src/Form/BynderConfigurationForm.php b/modules/contrib/bynder/src/Form/BynderConfigurationForm.php
+index 4481b4594..069d3f9a7 100644
+--- a/modules/contrib/bynder/src/Form/BynderConfigurationForm.php
++++ b/modules/contrib/bynder/src/Form/BynderConfigurationForm.php
+@@ -194,6 +194,13 @@ public function buildForm(array $form, FormStateInterface $form_state) {
+       ];
+     }
+ 
++    $form['pub_derivative_url'] = [
++      '#type' => 'checkbox',
++      '#title' => $this->t('Use the derivative\'s public url'),
++      '#description' => $this->t('Check this setting if you want to use the DAM url.'),
++      '#default_value' => $config->get('pub_derivative_url'),
++    ];
++
+     if ($meta_properties = $this->getMetaProperties()) {
+       $options = [];
+       foreach ($meta_properties as $key => $meta_property) {
+@@ -392,6 +399,7 @@ public function submitForm(array &$form, FormStateInterface $form_state) {
+       ->set('token_secret', $credentials['token_secret'])
+       ->set('account_domain', $credentials['account_domain'])
+       ->set('debug', $form_state->getValue('debug'))
++      ->set('pub_derivative_url', $form_state->getValue('pub_derivative_url'))
+       ->set('usage_metaproperty', $form_state->getValue('usage_metaproperty'))
+       ->set('restrictions.royalty_free', $restrictions['royalty_free'])
+       ->set('restrictions.web_license', $restrictions['web_license'])
+diff --git a/modules/contrib/bynder/src/Plugin/Field/FieldFormatter/BynderFormatter.php b/modules/contrib/bynder/src/Plugin/Field/FieldFormatter/BynderFormatter.php
+index 75f0d721b..7485f215d 100644
+--- a/modules/contrib/bynder/src/Plugin/Field/FieldFormatter/BynderFormatter.php
++++ b/modules/contrib/bynder/src/Plugin/Field/FieldFormatter/BynderFormatter.php
+@@ -279,6 +279,19 @@ public function viewElements(FieldItemListInterface $items, $langcode) {
+             ],
+           ];
+           $thumbnail_uri = isset($thumbnails[$settings['thumbnail']]) ? $thumbnails[$settings['thumbnail']] : $thumbnails['webimage'];
++
++          //$OG = $type_plugin->getField($media_entity, 'original')
++          $bynder_settings = $this->configFactory->get('bynder.settings');
++          if ($bynder_settings->get('pub_derivative_url') == '1') {
++            $url_components = [
++              $bynder_settings->get('account_domain'),
++              'm',
++              $type_plugin->getField($media_entity, 'idHash'),
++              $filename = str_replace(' ', '_', basename($thumbnail_uri)),
++            ];
++            $thumbnail_uri = implode('/', $url_components);
++          }
++
+           $element[$delta]['bynder_wrapper']['image'] = [
+             '#theme' => 'image',
+             '#uri' => $thumbnail_uri,
+diff --git a/modules/contrib/bynder/src/Plugin/MediaEntity/Type/Bynder.php b/modules/contrib/bynder/src/Plugin/MediaEntity/Type/Bynder.php
+index e22bbba55..c4ef078c1 100644
+--- a/modules/contrib/bynder/src/Plugin/MediaEntity/Type/Bynder.php
++++ b/modules/contrib/bynder/src/Plugin/MediaEntity/Type/Bynder.php
+@@ -211,6 +211,9 @@ public function getField(MediaInterface $media, $name) {
+         case 'modified':
+           return isset($this->apiResponse['dateModified']) ? $this->apiResponse['dateModified'] : FALSE;
+ 
++        case 'idHash':
++          return isset($this->apiResponse['idHash']) ? $this->apiResponse['idHash'] : FALSE;
++
+         default:
+           return isset($this->apiResponse[$name]) ? $this->apiResponse[$name] : FALSE;
+       }
